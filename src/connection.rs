@@ -353,7 +353,7 @@ impl ExtensionInformation {
                 let info = info.and_then(|c| c.reply().ok());
                 if let Some(info) = info {
                     // If the extension is not present, we return None, else we box it
-                    if info.present == 0 {
+                    if !info.present {
                         None
                     } else {
                         Some(Box::new(info))

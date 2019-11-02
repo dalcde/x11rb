@@ -13,9 +13,19 @@ rust_type_mapping = {
         'int32_t':  'i32',
         'int16_t':  'i16',
         'int8_t':   'i8',
+        'CARD64':   'u64',
+        'CARD32':   'u32',
+        'CARD16':   'u16',
+        'CARD8':    'u8',
+        'INT64':    'i64',
+        'INT32':    'i32',
+        'INT16':    'i16',
+        'INT8':     'i8',
         'char':     'u8',
+        'BYTE':     'u8',
         'float':    'f32',
         'double':   'f64',
+        'BOOL':     'bool',
 }
 
 
@@ -299,6 +309,8 @@ class Module(object):
                             source = self._to_rust_variable(field.field_name)
                         else:
                             source = "self.%s" % self._to_rust_variable(field.field_name)
+                            if hasattr(field.type, 'xml_type') and field.type.xml_type == 'BOOL':
+                                source = "(%s as u8)" % source
                         self.out("let %s = %s.to_ne_bytes();", self._to_rust_variable(field.field_name + "_bytes"), source)
                         for i in range(field.type.size):
                             result_bytes.append("%s[%d]" % (self._to_rust_variable(field.field_name + "_bytes"), i))
@@ -424,7 +436,7 @@ class Module(object):
                     where.append("%s: Into<%s>" % (letter, rust_type))
                     rust_type = letter
                 rust_type = self._to_rust_identifier(rust_type)
-                if name == ('xcb', 'InternAtom') and field.field_name == 'only_if_exists':
+                if name == ('xcb', 'InternAtom') and field.field_name == 'only_if_exists' and not hasattr(field, 'xml_type'):
                     rust_type = 'bool'
                 args.append("%s: %s" % (self._to_rust_variable(field.field_name), rust_type))
 
@@ -557,12 +569,14 @@ class Module(object):
                         # FIXME: Switch to a trait that we can implement on f32
                         self.trait_out("let %s = %s.to_bits().to_ne_bytes();", self._to_rust_variable(field.field_name + "_bytes"), self._to_rust_variable(field.field_name))
                     elif field.type.size is not None:  # Size None was already handled above
-                        if (name == ('xcb', 'InternAtom') and field.field_name == 'only_if_exists'):
+                        if name == ('xcb', 'InternAtom') and field.field_name == 'only_if_exists' and not hasattr(field.type, 'xml_type'):
                             self.trait_out("let %s = %s as %s;", field.field_name, field.field_name, self._to_rust_type(field.type))
                         if field.field_name == "length":
                             source = "TryInto::<%s>::try_into(length).unwrap_or(0)" % self._to_rust_type(field.type)
                         else:
                             source = self._to_rust_variable(field.field_name)
+                        if hasattr(field.type, 'xml_type') and field.type.xml_type == 'BOOL':
+                            source = "(%s as u8)" % source
                         self.trait_out("let %s = %s.to_ne_bytes();", self._to_rust_variable(field.field_name + "_bytes"), source)
                     if field.type.is_switch or field.type.size is None:
                         _emit_request()
@@ -665,7 +679,10 @@ class Module(object):
                             for i in range(field.type.nmemb):
                                 parts.append("self.%s[%d]" % (field_name, i))
                         elif field.type.size == 1:
-                            parts.append("self.%s" % field_name)
+                            if hasattr(field.type, 'xml_type') and field.type.xml_type == 'BOOL':
+                                parts.append("(self.%s as u8)" % field_name)
+                            else:
+                                parts.append("self.%s" % field_name)
                         else:
                             self.out("let %s = self.%s.to_ne_bytes();", field_name, field_name)
                             for i in range(field.type.size):
@@ -895,6 +912,12 @@ class Module(object):
 
         orig_name = name
         if type(name) == tuple:
+            if len(name) == 1:
+                if hasattr(field_type, 'xml_type'):
+                    assert field_type.xml_type in rust_type_mapping
+                    return rust_type_mapping[field_type.xml_type]
+                if name[0] in rust_type_mapping:
+                    return rust_type_mapping[name[0]]
             if name[0] == 'xcb':
                 name = name[1:]
             if self.namespace.is_ext and name[0] == self.namespace.ext_name:
@@ -906,10 +929,7 @@ class Module(object):
                 name = ext + "::" + name[1],
             assert len(name) == 1, orig_name
             name = name[0]
-
-        if name in rust_type_mapping:
-            return rust_type_mapping[name]
-        elif name.isupper():
+        if name.isupper():
             return self._to_rust_identifier(name)
         else:
             return name
