@@ -239,7 +239,7 @@ class Module(object):
         name = self._name(name)
         if '_' in name:
             name = self._to_rust_identifier(name)
-        self.out("pub type %s = %s;", name, self._to_rust_type(simple.name))
+        self.out("pub type %s = %s;", name, self._to_rust_type(simple))
         self.out("")
 
     def struct(self, struct, name):
@@ -295,7 +295,7 @@ class Module(object):
                             result_bytes.append("self.%s[%d]" % (self._to_rust_variable(field.field_name), i))
                     else:
                         if hasattr(field, "is_length_field_for"):
-                            self.out("let %s = self.%s.len() as %s;", self._to_rust_variable(field.field_name), field.is_length_field_for.field_name, self._to_rust_type(field.type.name))
+                            self.out("let %s = self.%s.len() as %s;", self._to_rust_variable(field.field_name), field.is_length_field_for.field_name, self._to_rust_type(field.type))
                             source = self._to_rust_variable(field.field_name)
                         else:
                             source = "self.%s" % self._to_rust_variable(field.field_name)
@@ -516,10 +516,10 @@ class Module(object):
                             other_field = [field for field in obj.fields if e.lenfield_name == field.field_name]
                             assert len(other_field) == 1
                             other_field = other_field[0]
-                            self.trait_out("let %s: %s = %s.len().try_into()?;", other_field.field_name, self._to_rust_type(other_field.type.name), other_field.is_length_field_for.field_name)
+                            self.trait_out("let %s: %s = %s.len().try_into()?;", other_field.field_name, self._to_rust_type(other_field.type), other_field.is_length_field_for.field_name)
                             return e.lenfield_name
 
-                    self.trait_out("let %s: %s = (%s).try_into().unwrap();", field.field_name, self._to_rust_type(field.type.name), expr_to_str_and_emit(field.type.expr))
+                    self.trait_out("let %s: %s = (%s).try_into().unwrap();", field.field_name, self._to_rust_type(field.type), expr_to_str_and_emit(field.type.expr))
                     self.trait_out("let %s_bytes = %s.to_ne_bytes();", field.field_name, self._to_rust_variable(field.field_name))
                     for i in range(field.type.size):
                         request.append("%s_bytes[%d]" % (field.field_name, i))
@@ -549,7 +549,7 @@ class Module(object):
                     if hasattr(field, "is_length_field_for"):
                         self.trait_out("let %s: %s = %s.len().try_into()?;",
                                        self._to_rust_variable(field.field_name),
-                                       self._to_rust_type(field.type.name),
+                                       self._to_rust_type(field.type),
                                        self._to_rust_variable(field.is_length_field_for.field_name))
                     if field.enum is not None:
                         self.trait_out("let %s = %s.into();", field.field_name, field.field_name)
@@ -558,9 +558,9 @@ class Module(object):
                         self.trait_out("let %s = %s.to_bits().to_ne_bytes();", self._to_rust_variable(field.field_name + "_bytes"), self._to_rust_variable(field.field_name))
                     elif field.type.size is not None:  # Size None was already handled above
                         if (name == ('xcb', 'InternAtom') and field.field_name == 'only_if_exists'):
-                            self.trait_out("let %s = %s as %s;", field.field_name, field.field_name, self._to_rust_type(field.type.name))
+                            self.trait_out("let %s = %s as %s;", field.field_name, field.field_name, self._to_rust_type(field.type))
                         if field.field_name == "length":
-                            source = "TryInto::<%s>::try_into(length).unwrap_or(0)" % self._to_rust_type(field.type.name)
+                            source = "TryInto::<%s>::try_into(length).unwrap_or(0)" % self._to_rust_type(field.type)
                         else:
                             source = self._to_rust_variable(field.field_name)
                         self.trait_out("let %s = %s.to_ne_bytes();", self._to_rust_variable(field.field_name + "_bytes"), source)
@@ -705,10 +705,10 @@ class Module(object):
         for field in fields:
             assert field.wire  # I *guess* that non-wire fields just have to be skipped
             if not field.type.is_pad:
-                rust_type = self._to_rust_type(field.type.name)
+                rust_type = self._to_rust_type(field.type)
                 if field.type.is_list and field.type.nmemb is not None:
                     for i in range(field.type.nmemb):
-                        self.out("let (%s_%s, new_remaining) = %s::try_parse(remaining)?;", field.field_name, i, self._to_rust_type(field.type.name))
+                        self.out("let (%s_%s, new_remaining) = %s::try_parse(remaining)?;", field.field_name, i, self._to_rust_type(field.type))
                         self.out("remaining = new_remaining;")
                     self.out("let %s = [", field.field_name)
                     for i in range(field.type.nmemb):
@@ -760,11 +760,11 @@ class Module(object):
                     field_name = self._to_rust_variable(field.field_name)
                     if field.type.is_list:
                         if field.type.nmemb is None:
-                            self.out("pub %s: Vec<%s>,", field_name, self._to_rust_type(field.type.name))
+                            self.out("pub %s: Vec<%s>,", field_name, self._to_rust_type(field.type))
                         else:
-                            self.out("pub %s: [%s; %s],", field_name, self._to_rust_type(field.type.name), field.type.nmemb)
+                            self.out("pub %s: [%s; %s],", field_name, self._to_rust_type(field.type), field.type.nmemb)
                     else:
-                        self.out("pub %s: %s,", field_name, self._to_rust_identifier(self._to_rust_type(field.type.name)))
+                        self.out("pub %s: %s,", field_name, self._to_rust_identifier(self._to_rust_type(field.type)))
         self.out("}")
 
         self.out("impl TryParse for %s%s {", name_transform(self._name(name)), extra_name)
@@ -797,7 +797,7 @@ class Module(object):
     def _to_complex_rust_type(self, field_type, aux_name, modifier):
         if field_type.is_switch:
             return modifier + aux_name
-        result = self._to_rust_type(field_type.name)
+        result = self._to_rust_type(field_type)
         if field_type.is_list:
             if field_type.nmemb is None:
                 result = "%s[%s]" % (modifier, result)
@@ -815,7 +815,7 @@ class Module(object):
         self.out("#[derive(Debug, Clone, Copy, Default)]")
         self.out("pub struct %s {", name)
         for field in switch.type.fields:
-            self.out.indent("%s: RustOption<%s>,", self._aux_field_name(field), self._to_rust_type(field.type.name))
+            self.out.indent("%s: RustOption<%s>,", self._aux_field_name(field), self._to_rust_type(field.type))
         self.out("}")
 
         self.out("impl %s {", name)
@@ -846,7 +846,7 @@ class Module(object):
                 self.out("result")
             self.out("}")
 
-            self.out("fn value_mask(&self) -> %s {", self._to_rust_type(mask_field.type.name))
+            self.out("fn value_mask(&self) -> %s {", self._to_rust_type(mask_field.type))
             with Indent(self.out):
                 self.out("let mut mask = 0;")
                 for field in switch.type.fields:
@@ -854,7 +854,7 @@ class Module(object):
                     assert expr.op == "enumref"
                     enum_name = self._name(expr.lenfield_type.name)
                     self.out("if self.%s.is_some() {", self._aux_field_name(field))
-                    self.out.indent("mask |= Into::<%s>::into(%s::%s);", self._to_rust_type(mask_field.type.name), enum_name, expr.lenfield_name)
+                    self.out.indent("mask |= Into::<%s>::into(%s::%s);", self._to_rust_type(mask_field.type), enum_name, expr.lenfield_name)
                     self.out("}")
                 self.out("mask")
             self.out("}")
@@ -862,7 +862,7 @@ class Module(object):
             for field in switch.type.fields:
                 aux_name = self._aux_field_name(field)
                 self.out("/// Set the %s field of this structure.", field.field_name)
-                self.out("pub fn %s<I>(mut self, value: I) -> Self where I: Into<RustOption<%s>> {", aux_name, self._to_rust_type(field.type.name))
+                self.out("pub fn %s<I>(mut self, value: I) -> Self where I: Into<RustOption<%s>> {", aux_name, self._to_rust_type(field.type))
                 with Indent(self.out):
                     self.out("self.%s = value.into();", aux_name)
                     self.out("self")
@@ -890,7 +890,9 @@ class Module(object):
     def _aux_field_name(self, field):
         return self._lower_snake_name((field.field_name,))
 
-    def _to_rust_type(self, name):
+    def _to_rust_type(self, field_type):
+        name = field_type.name
+
         orig_name = name
         if type(name) == tuple:
             if name[0] == 'xcb':
